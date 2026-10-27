@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<title>Nova Launcher</title>
+<style>
+  :root{--bg:#0e1116;--card:#171b22;--ac:#6c8cff;--tx:#e8ecf3;--mt:#8b94a7}
+  *{box-sizing:border-box}
+  body{margin:0;height:100vh;background:radial-gradient(1200px 600px at 20% 0,#1b2440,var(--bg));color:var(--tx);font:15px system-ui,"Noto Sans Thai",sans-serif;display:flex;align-items:center;justify-content:center}
+  .card{width:420px;background:var(--card);border:1px solid #232a36;border-radius:16px;padding:28px}
+  h1{margin:0 0 4px;font-size:22px} p.sub{margin:0 0 22px;color:var(--mt)}
+  label{display:block;margin:14px 0 6px;color:var(--mt);font-size:13px}
+  input,select{width:100%;padding:10px 12px;border-radius:10px;border:1px solid #2a3240;background:#0f1319;color:var(--tx);font:inherit}
+  button{margin-top:22px;width:100%;padding:13px;border:0;border-radius:12px;background:var(--ac);color:#fff;font:600 16px inherit;cursor:pointer}
+  button:disabled{opacity:.5;cursor:default}
+  .bar{height:8px;background:#0f1319;border-radius:99px;margin-top:18px;overflow:hidden}
+  .bar>i{display:block;height:100%;width:0;background:var(--ac);transition:width .15s}
+  #st{margin-top:10px;min-height:20px;color:var(--mt);font-size:13px}
+  #ver{position:fixed;right:12px;bottom:8px;color:var(--mt);font-size:12px}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Nova Launcher</h1>
+  <p class="sub">อัปเดตอัตโนมัติ · ไม่ต้องลง Java เอง</p>
+  <label>ชื่อผู้เล่น</label><input id="user" maxlength="16" placeholder="Steve">
+  <label>เวอร์ชัน Minecraft</label><select id="ver-sel"></select>
+  <label>RAM (MB)</label><input id="ram" type="number" min="1024" step="512" value="3072">
+  <button id="play">เล่นเลย</button>
+  <div class="bar"><i id="bar"></i></div>
+  <div id="st">กำลังเริ่ม...</div>
+</div>
+<div id="ver"></div>
+<script>
+  // ใส่ URL ของ pack.json ถ้าต้องการให้ launcher sync mod/config ของเซิร์ฟเวอร์ก่อนเข้าเกม (เว้นว่าง = ไม่ใช้)
+  const PACK_URL = "";
+  const T = window.__TAURI__, $ = id => document.getElementById(id);
+  const st = t => $("st").textContent = t, bar = r => $("bar").style.width = (r * 100) + "%";
+
+  T.event.listen("progress", ({ payload: p }) => { st(`${p.label} ${p.done}/${p.total}`); bar(p.total ? p.done / p.total : 0); });
+  T.event.listen("launched", () => { st("เปิดเกมแล้ว ✓"); bar(1); $("play").disabled = false; });
+
+  async function selfUpdate() {            // เช็กอัปเดตตัว launcher ทุกครั้งที่เปิด
+    try {
+      const u = await T.updater.check();
+      if (!u) return;
+      st(`พบเวอร์ชันใหม่ ${u.version} กำลังอัปเดต...`);
+      let total = 0, got = 0;
+      await u.downloadAndInstall(ev => {
+        if (ev.event === "Started") total = ev.data.contentLength || 0;
+        if (ev.event === "Progress") { got += ev.data.chunkLength; if (total) bar(got / total); }
+      });
+      await T.process.relaunch();
+    } catch (err) { console.warn("update check failed", err); }
+  }
+
+  async function init() {
+    $("user").value = localStorage.user || "";
+    $("ram").value = localStorage.ram || 3072;
+    $("ver").textContent = "v" + await T.app.getVersion();
+    await selfUpdate();
+    try {
+      const vs = await T.core.invoke("list_versions");
+      $("ver-sel").innerHTML = vs.map(v => `<option>${v}</option>`).join("");
+      if (localStorage.mc && vs.includes(localStorage.mc)) $("ver-sel").value = localStorage.mc;
+      st("พร้อมเล่น");
+    } catch (err) { st("โหลดรายการเวอร์ชันไม่ได้: " + err); }
+  }
+
+  $("play").onclick = async () => {
+    const username = $("user").value.trim();
+    if (!/^\w{3,16}$/.test(username)) return st("ชื่อผู้เล่นต้อง 3–16 ตัว (a-z, 0-9, _)");
+    localStorage.user = username; localStorage.mc = $("ver-sel").value; localStorage.ram = $("ram").value;
+    $("play").disabled = true;
+    try {
+      if (PACK_URL) await T.core.invoke("sync_pack", { url: PACK_URL });
+      await T.core.invoke("launch", { req: { version: $("ver-sel").value, username, ramMb: +$("ram").value } });
+    } catch (err) { st("ผิดพลาด: " + err); $("play").disabled = false; }
+  };
+  init();
+</script>
+</body>
+</html>

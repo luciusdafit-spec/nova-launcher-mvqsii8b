@@ -1,0 +1,30 @@
+{
+  "name": "nova-launcher",
+  "productName": "nova-launcher",
+  "version": "1.0.0",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win portable --x64 --publish never"
+  },
+  "build": {
+    "appId": "com.example.novalauncher",
+    "productName": "nova-launcher",
+    "files": [
+      "main.js",
+      "site/**/*"
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ]
+    },
+    "portable": {
+      "artifactName": "nova-launcher.exe"
+    }
+  },
+  "devDependencies": {
+    "electron": "33.2.1",
+    "electron-builder": "25.1.8"
+  }
+}
